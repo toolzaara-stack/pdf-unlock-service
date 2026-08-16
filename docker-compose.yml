@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  pdf-unlock-api:
+    build: .
+    container_name: toolzaara-pdf-unlock
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
