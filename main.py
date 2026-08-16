@@ -1,111 +1,75 @@
-import io
 import os
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
-from fastapi.responses import StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
-import pikepdf
+import shutil
 import fitz  # PyMuPDF
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
-app = FastAPI(
-    title="ToolZaara PDF Unlock & Repair Microservice",
-    description="Production-ready microservice to decrypt, unlock, and repair PDF files using QPDF (pikepdf) and PyMuPDF.",
-    version="1.0.0"
-)
+app = FastAPI(title="ToolZaara PDF Unlock Microservice")
 
-# Enable CORS for frontend integration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Supports all origins including toolzaara.online and mail.toolzaara.online
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get("/")
-def health_check():
-    return {
-        "status": "online",
-        "service": "ToolZaara PDF Unlock & Repair Service",
-        "engines": ["pikepdf (QPDF)", "PyMuPDF (fitz)"]
-    }
+UPLOAD_DIR = "/tmp/pdf_files"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/api/unlock-pdf")
-async def unlock_pdf(
-    file: UploadFile = File(...),
-    password: str = Form(default="")
-):
-    """
-    Receives an encrypted or permission-restricted PDF,
-    removes restrictions and repairs XRef tables, and returns clean PDF bytes.
-    """
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Uploaded file is not a valid PDF.")
+async def unlock_pdf(file: UploadFile = File(...), password: str = Form(None)):
+    input_path = os.path.join(UPLOAD_DIR, file.filename)
+    output_path = os.path.join(UPLOAD_DIR, "unlocked_" + file.filename)
 
-    file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded PDF file is empty.")
-
-    output_stream = io.BytesIO()
-
-    # --- Engine 1: pikepdf (QPDF engine - industry standard for decrypting and repairing PDFs) ---
     try:
-        pdf_input = io.BytesIO(file_bytes)
-        with pikepdf.open(pdf_input, password=password) as pdf:
-            # Linearize=False ensures complete recreation of xref tables
-            pdf.save(output_stream, linearize=False)
-            
-        output_stream.seek(0)
-        clean_filename = f"unlocked_{file.filename}"
-        return StreamingResponse(
-            output_stream,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="{clean_filename}"',
-                "Access-Control-Expose-Headers": "Content-Disposition"
-            }
-        )
-    except pikepdf.PasswordError:
-        raise HTTPException(
-            status_code=401, 
-            detail="Password required or incorrect password provided."
-        )
-    except Exception as e_pikepdf:
-        # --- Engine 2: PyMuPDF (fitz) Fallback for non-standard structures ---
-        try:
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-            if doc.is_encrypted:
-                if not doc.authenticate(password):
-                    raise HTTPException(
-                        status_code=401, 
-                        detail="Password required or incorrect password provided."
-                    )
-            
-            clean_pdf = fitz.open()
-            clean_pdf.insert_pdf(doc)
-            clean_bytes = clean_pdf.write(clean=True, deflate=True)
-            clean_pdf.close()
-            doc.close()
+        with open(input_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-            output_stream = io.BytesIO(clean_bytes)
-            output_stream.seek(0)
-            clean_filename = f"unlocked_{file.filename}"
-            return StreamingResponse(
-                output_stream,
-                media_type="application/pdf",
-                headers={
-                    "Content-Disposition": f'attachment; filename="{clean_filename}"',
-                    "Access-Control-Expose-Headers": "Content-Disposition"
-                }
-            )
-        except HTTPException:
-            raise
-        except Exception as e_fitz:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Failed to parse or repair PDF structure: {str(e_pikepdf)} | Fallback: {str(e_fitz)}"
-            )
+        # فتح الملف باستخدام PyMuPDF
+        doc = fitz.open(input_path)
 
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+        # إذا كان الملف مشفراً ويحتاج لكلمة مرور
+        if doc.needs_pass:
+            success = False
+            # 1. إذا أدخل المستخدم كلمة مرور يدوياً
+            if password and doc.authenticate(password):
+                success = True
+            else:
+                # 2. محاولة فتح الملف بدون كلمة مرور (إذا كان قفل صلاحيات فقط)
+                if doc.authenticate(""):
+                    success = True
+                else:
+                    # 3. قائمة كلمات مرور شائعة تجربها الأداة تلقائياً (مثل المواقع العالمية)
+                    common_passwords = ["", "123456", "1234", "0000", "password", "123456789", "admin", file.filename.split('.')[0]]
+                    for pwd in common_passwords:
+                        if doc.authenticate(pwd):
+                            success = True
+                            break
+            
+            if not success:
+                doc.close()
+                raise HTTPException(
+                    status_code=401, 
+                    detail="الملف محمي بكلمة مرور قوية تعذّر تخمينها. يرجى إدخال كلمة المرور الصحيحة."
+                )
+
+        # حفظ الملف بدون أي قيود أو كلمات مرور
+        doc.save(output_path, garbage=4, deflate=True)
+        doc.close()
+
+        return FileResponse(
+            output_path, 
+            media_type="application/pdf", 
+            filename="unlocked_" + file.filename
+        )
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # تنظيف الملفات المؤقتة
+        if os.path.exists(input_path):
+            os.remove(input_path)
