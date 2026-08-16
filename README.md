@@ -1,40 +1,37 @@
-# 🚀 ToolZaara PDF Unlock & Repair Microservice
+🚀 ToolZaara PDF Unlock & Repair Microservice
+A lightning-fast, high-performance backend microservice built with Python + FastAPI, powered by PyMuPDF (fitz) and multi-threaded dictionary-attack capabilities to decrypt, bypass PDF restrictions, and repair corrupted structures seamlessly.
 
-خدمة خلفية (Backend Microservice) فائقة السرعة والقوة مبنية بـ **Python + FastAPI** ومحركات **QPDF (`pikepdf`)** و **PyMuPDF (`fitz`)** لفك تشفير وتجاوز قيود ملفات الـ PDF وإصلاح بنيتها التالفة.
+📁 Project Structure:
+main.py: The complete API application featuring CORS support, auto-decryption multi-threading, and streaming/file responses.
 
----
+requirements.txt: Required Python dependencies.
 
-## 📁 محتويات المشروع:
-- `main.py`: تطبيق الـ API الكامل مع دعم CORS والاستجابة بالبث المباشر (Streaming Response).
-- `requirements.txt`: المكتبات المطلوبة.
-- `Dockerfile`: لإنشاء حاوية Docker سريعة وخفيفة.
-- `docker-compose.yml`: لتشغيل الخدمة بأمر واحد على أي سيرفر VPS.
+Dockerfile: Configuration for building a lightweight and fast Docker container.
 
----
+docker-compose.yml: For deploying and running the service with a single command on any VPS.
 
-## 🛠️ خيارات التشغيل والاستضافة:
-
-### 1️⃣ التشغيل المحلي أو على سيرفر (Python مباشر):
-```bash
+🛠️ Deployment & Execution Options:
+1️⃣ Local or Server Execution (Direct Python):
+Bash
 pip install -r requirements.txt
 python main.py
-```
-سيعمل الـ API على الرابط: `http://localhost:8000`
+The API will run locally at: http://localhost:8000
 
-### 2️⃣ التشغيل عبر Docker (على أي استضافة VPS مثل Hostinger VPS):
-```bash
+2️⃣ Running via Docker (on any VPS like Hostinger VPS):
+Bash
 docker compose up -d --build
-```
+3️⃣ Free Cloud Hosting on Render.com / Railway:
+Push the repository files to your GitHub account.
 
-### 3️⃣ الاستضافة المجانية على Render.com / Railway:
-1. ارفع مجلد `pdf-unlock-service` إلى حسابك على GitHub.
-2. ادخل إلى [Render.com](https://render.com) واضغط **New Web Service**.
-3. اختر المستودع الخاص بك وسيقوم Render باكتشاف الـ Dockerfile وتشغيله فوراً مع رابط HTTPS مجاني (مثال: `https://toolzaara-pdf.onrender.com`).
+Log in to Render.com and click New Web Service.
 
----
+Select your repository, and Render will automatically detect the Dockerfile, build it instantly, and provide a free HTTPS URL (e.g., [https://toolzaara-pdf.onrender.com](https://toolzaara-pdf.onrender.com)).
 
-## 🔗 نقاط النهاية (Endpoints):
-- **GET `/`**: فحص حالة الخدمة (Health Check).
-- **POST `/api/unlock-pdf`**:
-  - `file`: ملف الـ PDF (Multipart/form-data).
-  - `password`: كلمة السر (اختياري).
+🔗 Endpoints:
+GET /: Health check to verify service status.
+
+POST /api/unlock-pdf:
+
+file: The target PDF file (Multipart/form-data).
+
+password: Optional manual password parameter (though the service automatically tests thousands of common passwords in the background if omitted).
